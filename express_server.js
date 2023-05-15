@@ -76,6 +76,16 @@ function generateRandomString() {
     }
     return userUrls;
   };
+
+  const urlExists = function(longURL, urlDatabase){
+    for (const shortURL in urlDatabase) {
+      if (urlDatabase[shortURL].longURL === longURL) {
+        return true;
+      }
+    }
+    return false
+  }
+
   
  
   const cookieHasUser = function(cookie, userDatabase) {
@@ -87,10 +97,16 @@ function generateRandomString() {
   };
   
 
-const urlDatabase = {
-  "b2xVn2": "http://www.lighthouselabs.ca",
-  "9sm5xK": "http://www.google.com"
-};
+  const urlDatabase = {
+    b6UTxQ: {
+      longURL: "https://www.tsn.ca",
+      userID: "aJ48lW",
+    },
+    i3BoGr: {
+      longURL: "https://www.google.ca",
+      userID: "aJ48lW",
+    },
+  }; 
 
 app.get("/", (req, res) => {
   if (cookieHasUser(req.session.user_id, users)) {
@@ -170,13 +186,22 @@ app.get("/u/:shortURL", (req, res) => {
 });
 
 app.post("/urls", (req, res) => {
+  const longURL = req.body.longURL
+  if (urlExists(longURL, urlDatabase)){
+    res.status(400).send("URL already exists");
+    return
+  }
+
+
   if (req.session.user_id) {
     const shortURL = generateRandomString();
     urlDatabase[shortURL] = {
       longURL: req.body.longURL,
       userID: req.session.user_id,
     };
+  
     res.redirect(`/urls/${shortURL}`);
+  
   } else {
     res.status(401).send("You must be logged in to a valid account to create short URLs.");
   }
@@ -237,15 +262,17 @@ app.post("/urls/:shortURL/delete", (req, res) => {
 });
 
 app.post("/urls/:id", (req, res) => {
-  const userID = req.session.user_id;
-  const userUrls = urlsForUser(userID, urlDatabase);
-  if (Object.keys(userUrls).includes(req.params.id)) {
-    const shortURL = req.params.id;
-    urlDatabase[shortURL].longURL = req.body.newURL;
-    res.redirect('/urls');
-  } else {
-    res.status(401).send("You do not have authorization to edit this short URL.");
-  }
+  const userId = req.session.user_id;
+  if (!userId) return res.redirect("/register");
+
+  const { id } = req.params;
+  const { newLongURL } = req.body;
+
+  if (!urlDatabase[id] || urlDatabase[id].userID !== userId)
+    return res.redirect("/urls");
+
+  urlDatabase[id].longURL = newLongURL;
+  res.redirect("/urls");
 });
 
 app.listen(PORT, () => {
