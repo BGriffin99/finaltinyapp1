@@ -135,9 +135,9 @@ app.get("/", (req, res) => {
 // URL list page
 app.get("/urls", (req, res) => {
   if (!req.session.user_id) {
-    res.redirect("/login");
+    res.status(401).render("error", { message: "Please log in to access this page." });
     return;
-  }
+  } 
   
   let templateVars = {
     urls: urlsForUser(req.session.user_id, urlDatabase),
@@ -185,24 +185,30 @@ app.get("/login", (req, res) => {
 // URL details page
 app.get("/urls/:shortURL", (req, res) => {
   if (!req.session.user_id) {
-    res.redirect("/login");
+    res.status(401).render("error", { message: "Please log in to access this page." });
     return;
   }
-  if (urlDatabase[req.params.shortURL]) {
-    let templateVars = {
-      shortURL: req.params.shortURL,
-      longURL: urlDatabase[req.params.shortURL].longURL,
-      urlUserID: urlDatabase[req.params.shortURL].userID,
-      user: users[req.session.user_id],
-    };
-    res.render("urls_show", templateVars);
-  } else {
-    res
-      .status(404)
-      .send(
-        "The short URL you entered does not correspond with a long URL at this time."
-      );
+
+  const shortURL = req.params.shortURL;
+  const url = urlDatabase[shortURL];
+  
+  if (!url) {
+    res.status(404).render("error", { message: "The short URL you entered does not correspond with a long URL at this time." });
+    return;
   }
+
+  if (url.userID !== req.session.user_id) {
+    res.status(403).render("error", { message: "You are not authorized to access this URL." });
+    return;
+  }
+
+  let templateVars = {
+    shortURL: shortURL,
+    longURL: url.longURL,
+    urlUserID: url.userID,
+    user: users[req.session.user_id],
+  };
+  res.render("urls_show", templateVars);
 });
 
 // Redirect to long URL
@@ -314,13 +320,18 @@ app.post("/urls/:shortURL/delete", (req, res) => {
 // Update URL
 app.post("/urls/:id", (req, res) => {
   const userId = req.session.user_id;
-  if (!userId) return res.redirect("/register");
+  if (!userId) {
+    res.status(401).render("error", { message: "Please log in to access this page." });
+    return;
+  }
 
   const { id } = req.params;
   const { newLongURL } = req.body;
 
-  if (!urlDatabase[id] || urlDatabase[id].userID !== userId)
-    return res.redirect("/urls");
+  if (!urlDatabase[id] || urlDatabase[id].userID !== userId) {
+    res.status(403).render("error", { message: "You are not authorized to modify this URL." });
+    return;
+  }
 
   urlDatabase[id].longURL = newLongURL;
   res.redirect("/urls");
